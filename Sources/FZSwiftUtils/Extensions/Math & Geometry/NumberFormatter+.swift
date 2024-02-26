@@ -9,67 +9,110 @@ import CoreGraphics
 import Foundation
 
 public extension NumberFormatter {
+    
+    /// The lowest number allowed as input by the receiver.
+    var minimumValue: Double? {
+        get { minimum?.doubleValue }
+        set {
+            if let newValue = newValue {
+                minimum = NSNumber(newValue)
+            } else {
+                minimum = nil
+            }
+        }
+    }
+    
+    /// The highest number allowed as input by the receiver.
+    var maximumValue: Double? {
+        get { maximum?.doubleValue }
+        set {
+            if let newValue = newValue {
+                maximum = NSNumber(newValue)
+            } else {
+                maximum = nil
+            }
+        }
+    }
+    
     /**
-     Creates a `NumberFormatter` instance configured for decimal formatting.
+     Creates an integer number formatter.
 
      - Parameters:
-        - min: The minimum number of fraction digits to display. The default value is `0`.
-        - max: The maximum number of fraction digits to display. The default value is `0`.
+        - minValue: The minimum number.
+        - maxValue: The maximum number.
+
+     - Returns: A `NumberFormatter` instance configured for integer formatting.
+     */
+    static func integer(minValue: Int? = nil, maxValue: Int? = nil) -> NumberFormatter {
+        NumberFormatter(style: .none, minValue: minValue != nil ? Double(minValue!) : nil, maxValue: maxValue != nil ? Double(maxValue!) : nil)
+    }
+    
+    /**
+     Creates a decimal number formatter.
+
+     - Parameters:
+        - minValue: The minimum number.
+        - maxValue: The maximum number.
+        - minFraction: The minimum number of digits after the decimal separator.
+        - maxFraction: The maximum number of digits after the decimal separator.
 
      - Returns: A `NumberFormatter` instance configured for decimal formatting.
      */
-    static func decimal(min: Int = 0, max: Int = 0) -> NumberFormatter {
-        let formatter = NumberFormatter(minFractionDigits: min, maxFractionDigits: max)
-        formatter.numberStyle = .decimal
-        return formatter
+    static func decimal(minValue: Double? = nil, maxValue: Double? = nil, minFraction: Int? = nil, maxFraction: Int? = nil) -> NumberFormatter {
+        NumberFormatter(style: .decimal, minValue: minValue, maxValue: maxValue, minFraction: minFraction, maxFraction: maxFraction)
     }
-
+    
     /**
-     Creates a `NumberFormatter` instance configured for percent formatting.
+     Creates a percent number formatter.
 
      - Parameters:
-        - min: The minimum number of fraction digits to display. The default value is `0`.
-        - max: The maximum number of fraction digits to display. The default value is `0`.
+        - minValue: The minimum number.
+        - maxValue: The maximum number.
+        - minFraction: The minimum number of digits after the decimal separator.
+        - maxFraction: The maximum number of digits after the decimal separator.
 
      - Returns: A `NumberFormatter` instance configured for percent formatting.
      */
-    static func percent(min: Int = 0, max: Int = 0) -> NumberFormatter {
-        let formatter = NumberFormatter(minFractionDigits: min, maxFractionDigits: max)
-        formatter.numberStyle = .percent
-        return formatter
+    static func percent(minValue: Double? = nil, maxValue: Double? = nil, minFraction: Int? = nil, maxFraction: Int? = nil) -> NumberFormatter {
+        NumberFormatter(style: .percent, minValue: minValue, maxValue: maxValue, minFraction: minFraction, maxFraction: maxFraction)
     }
-
+    
     /**
-     Creates a `NumberFormatter` instance with the specified minimum fraction digits.
-
-     - Parameter minFractionDigits: The minimum number of fraction digits to display.
-     */
-    convenience init(minFractionDigits: Int) {
-        self.init()
-        minimumFractionDigits = minFractionDigits
-    }
-
-    /**
-     Creates a `NumberFormatter` instance with the specified maximum fraction digits.
-
-     - Parameter maxFractionDigits: The maximum number of fraction digits to display.
-     */
-    convenience init(maxFractionDigits: Int) {
-        self.init()
-        maximumFractionDigits = maxFractionDigits
-    }
-
-    /**
-     Creates a `NumberFormatter` instance with the specified minimum and maximum fraction digits.
+     Creates a currency number formatter.
 
      - Parameters:
-        - minFractionDigits: The minimum number of fraction digits to display.
-        - maxFractionDigits: The maximum number of fraction digits to display.
+        - minValue: The minimum number.
+        - maxValue: The maximum number.
+        - minFraction: The minimum number of digits after the decimal separator.
+        - maxFraction: The maximum number of digits after the decimal separator.
+
+     - Returns: A `NumberFormatter` instance configured for currency formatting.
      */
-    convenience init(minFractionDigits: Int, maxFractionDigits: Int) {
+    static func currency(minValue: Double? = nil, maxValue: Double? = nil, minFraction: Int? = nil, maxFraction: Int? = nil) -> NumberFormatter {
+        NumberFormatter(style: .currency, minValue: minValue, maxValue: maxValue, minFraction: minFraction, maxFraction: maxFraction)
+    }
+    
+    /**
+     Creates a currency number formatter with the specified style.
+
+     - Parameters:
+        - minValue: The formatting style.
+        - minValue: The minimum number.
+        - maxValue: The maximum number.
+        - minFraction: The minimum number of digits after the decimal separator.
+        - maxFraction: The maximum number of digits after the decimal separator.
+
+     - Returns: A `NumberFormatter` instance configured for currency formatting.
+     */
+    convenience init(style: Style, minValue: Double? = nil, maxValue: Double? = nil, minFraction: Int? = nil, maxFraction: Int? = nil) {
         self.init()
-        minimumFractionDigits = minFractionDigits
-        maximumFractionDigits = maxFractionDigits
+        self.numberStyle = style
+        minimumValue = minValue
+        maximumValue = maxValue
+        minimumFractionDigits = minFraction ?? 0
+        maximumFractionDigits = maxFraction ?? 200000
+        allowsFloats = true
+        isLenient = true
     }
 
     /**

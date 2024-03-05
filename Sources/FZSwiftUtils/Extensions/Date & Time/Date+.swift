@@ -14,22 +14,25 @@ public extension Date {
      - Parameters:
         - value: The value to be added.
         - component: The component of the date to which the value should be added.
+        - calendar: The calendar to use.
 
      - Returns: A new `Date` object obtained by adding the specified value to the given component of the date.
      */
-    func adding(_ value: Int, to component: Calendar.Component) -> Date {
-        Calendar.current.date(byAdding: component, value: value, to: self)!
+    func adding(_ value: Int, to component: Calendar.Component, calendar: Calendar = Calendar.current) -> Date {
+        calendar.date(byAdding: component, value: value, to: self) ?? self
     }
 
     /**
      Returns the value of a specific component of the date.
 
-     - Parameter component: The component of the date for which to retrieve the value.
+     - Parameters:
+        - component: The component of the date for which to retrieve the value.
+     - calendar: The calendar to use.
 
      - Returns: The value of the specified component of the date. If the value is not available, 0 is returned.
      */
-    func value(for component: Calendar.Component) -> Int {
-        let components = Calendar.current.dateComponents([component], from: self)
+    func value(for component: Calendar.Component, calendar: Calendar = Calendar.current) -> Int {
+        let components = calendar.dateComponents([component], from: self)
         return components.value(for: component) ?? 0
     }
 
@@ -39,11 +42,12 @@ public extension Date {
      - Parameters:
         - value: The new value to set.
         - component: The component of the date to be set.
+        - calendar: The calendar to use.
 
      This method mutates the current date by setting the specified component to the given value.
      */
-    mutating func setValue(_ value: Int, for component: Calendar.Component) {
-        self = Calendar.current.date(bySetting: component, value: value, of: self) ?? self
+    mutating func setValue(_ value: Int, for component: Calendar.Component, calendar: Calendar = Calendar.current) {
+        self = calendar.date(bySetting: component, value: value, of: self) ?? self
     }
 
     /**
@@ -177,106 +181,36 @@ public extension Date {
 
 public extension Date {
     /**
-     Returns the start date of a specific component.
+     Returns the beginning date of a specific component.
 
-     - Parameter component: The component of the date for which to retrieve the start date.
+     - Parameters:
+        - component: The component of the date for which to retrieve the start date.
+        - calendar: The calendar.
 
-     - Returns: The start date of the specified component. If the component is not supported or the calculation fails, the original date is returned.
+     - Returns: The beginning date of the specified component, or `nil` if the component is not supported or the calculation fails.
      */
-    func start(of component: Calendar.Component) -> Date {
-        if component == .day {
-            return Calendar.current.startOfDay(for: self)
-        }
-
-        var components: Set<Calendar.Component> {
-            switch component {
-            case .second:
-                return [.year, .month, .day, .hour, .minute, .second]
-
-            case .minute:
-                return [.year, .month, .day, .hour, .minute]
-
-            case .hour:
-                return [.year, .month, .day, .hour]
-
-            case .weekOfYear, .weekOfMonth:
-                return [.yearForWeekOfYear, .weekOfYear]
-
-            case .month:
-                return [.year, .month]
-
-            case .year:
-                return [.year]
-
-            default:
-                return []
-            }
-        }
-
-        guard !components.isEmpty else { return self }
-        return Calendar.current.date(from: Calendar.current.dateComponents(components, from: self)) ?? self
+    func beginning(of component: Calendar.Component, calendar: Calendar = Calendar.current) -> Date? {
+        var startDate = self
+        var timeInterval: TimeInterval = 0
+        guard calendar.dateInterval(of: component, start: &startDate, interval: &timeInterval, for: self) else { return nil }
+        return startDate
     }
 
+    
     /**
      Returns the end date of a specific component.
 
-     - Parameter component: The component of the date for which to retrieve the end date.
+     - Parameters:
+        - component: The component of the date for which to retrieve the end date.
+        - calendar: The calendar.
+        - returnNextIfAtBoundary: A Boolean value indicating whether to return the next date if at boundary.
 
-     - Returns: The end date of the specified component. If the component is not supported or the calculation fails, the original date is returned.
+     - Returns: The end date of the specified component, or `nil` if the component is not supported or the calculation fails.
      */
-    func end(of component: Calendar.Component) -> Date {
-        let calendar = Calendar.current
-        switch component {
-        case .second:
-            var date = adding(1, to: .second)
-            date = calendar.date(from:
-                calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date))!
-            date = date.adding(-1, to: .second)
-            return date
-
-        case .minute:
-            var date = adding(1, to: .minute)
-            let after = calendar.date(from:
-                calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date))!
-            date = after.adding(-1, to: .second)
-            return date
-
-        case .hour:
-            var date = adding(1, to: .hour)
-            let after = calendar.date(from:
-                calendar.dateComponents([.year, .month, .day, .hour], from: date))!
-            date = after.adding(-1, to: .second)
-            return date
-
-        case .day:
-            var date = adding(1, to: .day)
-            date = calendar.startOfDay(for: date)
-            date = date.adding(-1, to: .second)
-            return date
-
-        case .weekOfYear, .weekOfMonth:
-            var date = self
-            let beginningOfWeek = calendar.date(from:
-                calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date))!
-            date = beginningOfWeek.adding(7, to: .day).adding(-1, to: .second)
-            return date
-
-        case .month:
-            var date = adding(1, to: .month)
-            let after = calendar.date(from:
-                calendar.dateComponents([.year, .month], from: date))!
-            date = after.adding(-1, to: .second)
-            return date
-
-        case .year:
-            var date = adding(1, to: .year)
-            let after = calendar.date(from:
-                calendar.dateComponents([.year], from: date))!
-            date = after.adding(-1, to: .second)
-            return date
-        default:
-            return self
-        }
+    func end(of component: Calendar.Component, calendar: Calendar = Calendar.current, returnNextIfAtBoundary: Bool = true) -> Date? {
+        guard let startDate = beginning(of: component, calendar: Calendar.current) else { return nil }
+        if startDate == self && !returnNextIfAtBoundary { return self }
+        return startDate.adding(1, to: component, calendar: calendar)
     }
 
     /**
@@ -344,36 +278,41 @@ public extension Date {
     }
 
     static func == (lhs: Date, rhs: ComparisonType) -> Bool {
-        let from: Date
+        var from: Date
         let to: Date
         switch rhs {
         case .today:
-            from = lhs.start(of: .day)
-            to = from.end(of: .day)
+            from = lhs.beginning(of: .day) ?? lhs
+            to = from.end(of: .day) ?? from
         case .yesterday:
-            from = lhs.adding(-1, to: .day).start(of: .day)
-            to = from.end(of: .day)
+            from = lhs.adding(-1, to: .day)
+            from = from.beginning(of: .day) ?? from
+            to = from.end(of: .day) ?? from
         case .tomorrow:
-            from = lhs.adding(1, to: .day).start(of: .day)
-            to = from.end(of: .day)
+            from = lhs.adding(1, to: .day)
+            from = from.beginning(of: .day) ?? from
+            to = from.end(of: .day) ?? from
         case let .this(unit):
-            from = lhs.start(of: unit)
-            to = from.end(of: unit)
+            from = lhs.beginning(of: unit) ?? lhs
+            to = from.end(of: unit) ?? from
         case let .next(unit):
-            from = lhs.adding(1, to: unit).start(of: unit)
-            to = from.end(of: unit)
+            from = lhs.adding(1, to: unit)
+            from = from.beginning(of: unit) ?? from
+            to = from.end(of: unit) ?? from
         case let .last(value, unit):
-            from = lhs.adding(-value, to: unit).start(of: unit)
-            to = from.end(of: unit)
+            from = lhs.adding(-value, to: unit)
+            from = from.beginning(of: unit) ?? from
+            to = from.end(of: unit) ?? from
         case .now:
             from = Date()
             to = Date().adding(30, to: .second)
         case let .previous(unit):
-            from = lhs.adding(-1, to: unit).start(of: unit)
-            to = from.end(of: unit)
+            from = lhs.adding(-1, to: unit)
+            from = from.beginning(of: unit) ?? from
+            to = from.end(of: unit) ?? from
         case let .sameDay(date):
-            from = date.start(of: .day)
-            to = date.end(of: .day)
+            from = date.beginning(of: .day) ?? date
+            to = date.end(of: .day) ?? date
         }
         return lhs.isBetween(from, to)
     }

@@ -11,9 +11,13 @@ import Foundation
 public enum NSCodingError: Error {
     /// Unpacking failed.
     case unpacking
+    
+    /// Couldn't cast
+    case castingFailed
 }
 
 public extension NSCoding where Self: NSObject {
+    
     /**
      Creates an archived-based copy of the object.
 
@@ -35,6 +39,25 @@ public extension NSCoding where Self: NSObject {
         }
         return copy
     }
+    
+    /**
+     Creates an archived-based copy of the object as the specified subclass.
+     
+     - Parameter subclass: The subclass of the copy.
+
+     - Throws: An error if copying fails or the specified class isn't a subclass.
+     */
+    func archiveBasedCopy<Subclass: NSObject & NSCoding>(as subclass: Subclass.Type) throws -> Subclass {
+        let data = NSMutableData()
+        let archiver = NSKeyedArchiver(forWritingWith: data)
+        encode(with: archiver)
+        archiver.finishEncoding()
+        let unarchiver = NSKeyedUnarchiver(forReadingWith: data as Data)
+        guard let object = Subclass(coder: unarchiver) else {
+            throw NSCodingError.castingFailed
+        }
+        return object
+    }
 }
 
 public extension NSObject {
@@ -49,7 +72,28 @@ public extension NSObject {
         guard let keypathString = keypath._kvcKeyPathString else { return }
         removeObserver(observer, forKeyPath: keypathString)
     }
+    
+    /**
+     Returns the value for the property identified by a given key.
 
+     - Parameter key: The key of the property.
+     - Returns: The value for the property identified by key, or `nil` if the key doesn't exist.
+     */
+    func value(forKeySafely key: String) -> Any? {
+        guard containsProperty(named: key) else { return nil }
+        return value(forKey: key)
+    }
+    
+    /**
+     Returns the value for the property identified by a given key.
+
+     - Parameter key: The key of the property.
+     - Returns: The value for the property identified by key, or `nil` if the key doesn't exist.
+     */
+    func value<Value>(forKey key: String) -> Value? {
+        value(forKeySafely: key) as? Value
+    }
+    
     /**
      Sets the value safely for the specified key, only if the object contains a property with the given key.
 
@@ -61,36 +105,6 @@ public extension NSObject {
         if containsProperty(named: key) {
             setValue(value, forKey: key)
         }
-    }
-    
-    /**
-     Returns the value for the property identified by a given key.
-
-     - Parameters:
-        - value: The value to set.
-        - key: The key of the property.
-
-     - Returns: The value for the property identified by key, or `nil` if the key doesn't exist.
-     */
-    func value(forKeySafely key: String) -> Any? {
-        guard containsProperty(named: key) else { return nil }
-        return value(forKey: key)
-    }
-
-    /**
-     Retrieves the value for the specified key, casting it to the specified type, if the object contains a property with the given key.
-
-     - Parameters:
-        - key: The key of the property to retrieve the value for.
-        - type: The type to cast the value to.
-
-     - Returns: The value for the specified key, cast to the specified type, or `nil` if the key is not found or the value cannot be cast.
-     */
-    func value<T>(forKey key: String, type _: T.Type) -> T? {
-        if containsProperty(named: key) {
-            return value(forKey: key) as? T
-        }
-        return nil
     }
 
     /**

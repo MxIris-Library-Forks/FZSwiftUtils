@@ -13,6 +13,7 @@ import AppKit
 import UIKit
 #endif
 
+
 public extension BinaryFloatingPoint {
     /// Converts the value from degrees to radians.
     var degreesToRadians: Self {
@@ -189,3 +190,32 @@ extension Int {
     }
 }
 
+extension BinaryFloatingPoint where Self: LosslessStringConvertible {
+    /**
+     String representation of the value.
+     
+     - Parameters:
+        - minPlaces: The minimum amount of digits after the decimal separator.
+        - maxPlaces: The maximum amount of digits after the decimal separator.
+        - groupingSeparator: A Boolean value indicating whether the string should contain grouping separators.
+     */
+    public func string(minPlaces: Int = 1, maxPlaces: Int? = nil, groupingSeparator: Bool = false) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = minPlaces.clamped(min: 0)
+        formatter.maximumFractionDigits = maxPlaces ?? -1
+        formatter.usesGroupingSeparator = groupingSeparator
+        return formatter.string(for: self) ?? String(self)
+    }
+    
+    /**
+     String representation of the value.
+     
+     - Parameters:
+        - places: The amount of digits after the decimal separator.
+        - groupingSeparator: A Boolean value indicating whether the string should contain grouping separators.
+     */
+    public func string(places: Int, groupingSeparator: Bool = false) -> String {
+        return string(minPlaces: places, maxPlaces: places, groupingSeparator: groupingSeparator)
+    }    
+}

@@ -37,6 +37,8 @@ import SwiftUI
     @available(macOS 11.0, *)
     public typealias NSUILayoutGuide = NSLayoutGuide
     public typealias NSUICollectionViewItem = NSCollectionViewItem
+    public typealias NSUIRectEdge = RectEdge
+    public typealias NSUIRectCorner = NSRectCorner
 #elseif canImport(UIKit)
     import UIKit
     public typealias NSUIBezierPath = UIBezierPath
@@ -50,6 +52,8 @@ import SwiftUI
     public typealias NSUIImageSymbolConfiguration = UIImage.SymbolConfiguration
     public typealias NSUIImageSymbolScale = UIImage.SymbolScale
     public typealias NSUIImageSymbolWeight = UIImage.SymbolWeight
+    public typealias NSUIRectEdge = UIRectEdge
+    public typealias NSUIRectCorner = UIRectCorner
 #endif
 
 #if os(iOS) || os(tvOS)

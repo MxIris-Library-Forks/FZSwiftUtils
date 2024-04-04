@@ -219,17 +219,11 @@ public extension CGRect {
         set { origin.y = newValue - height * 0.5 }
     }
 
-    #if os(macOS)
     /// Returns a rectangle that is smaller or larger than the source rectangle, with the same center point.
-    func inset(by edgeInsets: NSEdgeInsets) -> CGRect {
-        inset(by: NSDirectionalEdgeInsets.init(top: edgeInsets.top, leading: edgeInsets.left, bottom: edgeInsets.bottom, trailing: edgeInsets.right))
+    func inset(by edgeInsets: NSUIEdgeInsets) -> CGRect {
+        inset(by: NSDirectionalEdgeInsets(top: edgeInsets.top, leading: edgeInsets.left, bottom: edgeInsets.bottom, trailing: edgeInsets.right))
     }
-    #elseif canImport(UIKit)
-    /// Returns a rectangle that is smaller or larger than the source rectangle, with the same center point.
-    func inset(by edgeInsets: UIEdgeInsets) -> CGRect {
-        inset(by: NSDirectionalEdgeInsets.init(top: edgeInsets.top, leading: edgeInsets.left, bottom: edgeInsets.bottom, trailing: edgeInsets.right))
-    }
-    #endif
+    
     /// Returns a rectangle that is smaller or larger than the source rectangle, with the same center point.
     func inset(by edgeInsets: NSDirectionalEdgeInsets) -> CGRect {
         var result = self
@@ -264,60 +258,39 @@ public extension CGRect {
      Returns a new rect expanded by the specified amount in the given edge directions.
 
      - Parameters:
-        - amount: The amount by which to expand the rect.
         - edges: The edge directions in which to expand the rect.
+        - amount: The amount by which to expand the rect.
 
      - Returns: A new rect expanded by the specified amount in the given edge directions.
      */
-    func expanded(_ amount: CGFloat, to edges: ExpansionEdge) -> CGRect {
+    func expand(_ edges: NSUIRectEdge, by amount: CGFloat) -> CGRect {
         var frame = self
-        if edges.contains(.width) {
+        if edges.contains([.left, .right]) {
             frame = CGRect(x: minX - (amount / 2.0), y: minY, width: width + amount, height: height)
-        } else if edges.contains(.minXEdge) {
+        } else if edges.contains(.left) {
             frame = CGRect(x: minX - amount, y: minY, width: width + amount, height: height)
-        } else if edges.contains(.maxXEdge) {
+        } else if edges.contains(.right) {
             frame = CGRect(x: minX, y: minY, width: width + amount, height: height)
         }
         
         if edges.contains(.height) {
             return CGRect(x: frame.minX, y: frame.minY - (amount / 2.0), width: frame.width, height: frame.height + amount)
-        } else if edges.contains(.minYEdge) {
+        } else if edges.contains(.bottom) {
+            #if os(macOS)
             return CGRect(x: frame.minX, y: frame.minY - amount, width: frame.width, height: frame.height + amount)
-        } else if edges.contains(.maxYEdge) {
+            #else
             return CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height + amount)
+            #endif
+        } else if edges.contains(.top) {
+            #if os(macOS)
+            return CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height + amount)
+            #else
+            return CGRect(x: frame.minX, y: frame.minY - amount, width: frame.width, height: frame.height + amount)
+            #endif
         }
         return frame
     }
     
-    /// The edge directions used for expanding a rect.
-    struct ExpansionEdge: OptionSet, Codable {
-        
-        /// `minX` edge.
-        public static let minXEdge = ExpansionEdge(rawValue: 1 << 0)
-        
-        /// `maxX` edge.
-        public static let maxXEdge = ExpansionEdge(rawValue: 1 << 1)
-        
-        /// `minY` edge.
-        public static let minYEdge = ExpansionEdge(rawValue: 1 << 2)
-        
-        /// `maxY` edge.
-        public static let maxYEdge = ExpansionEdge(rawValue: 1 << 3)
-        
-        /// `minX` & `maxX` edge.
-        public static let width: ExpansionEdge = [.minXEdge, .maxXEdge]
-        
-        /// `minY` & `maxY` edge.
-        public static let height: ExpansionEdge = [.minYEdge, .maxYEdge]
-        
-        /// All edges.
-        public static let all: ExpansionEdge = [.minXEdge, .maxXEdge, .minYEdge, .maxYEdge]
-        
-        public let rawValue: Int32
-        
-        public init(rawValue: Int32) { self.rawValue = rawValue }
-    }
-
     /**
      Returns a new rect scaled by the specified factor.
 

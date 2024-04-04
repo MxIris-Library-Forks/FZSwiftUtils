@@ -15,13 +15,22 @@ public extension Progress {
             setAssociatedValue(newValue, key: "Progress_identifier")
         }
     }
+    
+    /// The time interval for calculating the throughput and estimate time remaining via ``updateEstimatedTimeRemaining()``.
+    var estimateTimeEvaluationTimeInterval: TimeInterval {
+        get { getAssociatedValue("progressSamples", initialValue: 10) }
+        set { setAssociatedValue(newValue, key: "progressSamples") }
+    }
 
     /// Updates the estimate time remaining and throughput.
     func updateEstimatedTimeRemaining() {
-        setupEstimatedTimeProgressObserver()
-        updateEstimatedTimeRemaining(dateStarted: estimatedTimeStartDate)
+        refreshThroughputAndEstimatedTimeRemaining()
+        
+        if !autoUpdateEstimatedTimeRemaining {
+            setupEstimatedTimeProgressObserver()
+        }
     }
-
+    
     /**
      Updates the estimate time remaining and throughput by providing the start date of the progress.
 
@@ -78,6 +87,27 @@ public extension Progress {
 
         self.throughput = throughput
         estimatedTimeRemaining = secondsRemaining
+        
+        delayedEstimatedTimeRemainingUpdate?.cancel()
+        if autoUpdateEstimatedTimeRemaining, !isCompleted {
+            let task = DispatchWorkItem { [weak self] in
+                guard let self = self, self.autoUpdateEstimatedTimeRemaining else { return }
+                self.updateEstimatedTimeRemaining()
+            }
+            delayedEstimatedTimeRemainingUpdate = task
+            let lastUpdate = TimeDuration(from: lastUpdate, to: Date())
+            if lastUpdate.minutes > 10 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 120, execute: task)
+            } else if lastUpdate.minutes > 5 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 60, execute: task)
+            } else if lastUpdate.minutes > 3 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: task)
+            } else if lastUpdate.minutes > 2 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: task)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: task)
+            }
+        }
     }
 
     /// A Boolean value indicating whether the progress should auomatically update the estimated time and throughput remaining.
@@ -86,8 +116,18 @@ public extension Progress {
         set {
             guard newValue != autoUpdateEstimatedTimeRemaining else { return }
             setAssociatedValue(newValue, key: "Progress_autoUpdateEstimatedTimeRemaining")
-            setupEstimatedTimeProgressObserver(newValue)
+            setupEstimatedTimeProgressObserver()
         }
+    }
+    
+    internal var delayedEstimatedTimeRemainingUpdate: DispatchWorkItem? {
+        get { getAssociatedValue("delayedEstimatedTimeRemainingUpdate", initialValue: nil ) }
+        set { setAssociatedValue(newValue, key: "delayedEstimatedTimeRemainingUpdate") }
+    }
+    
+    internal var lastUpdate: Date {
+        get { getAssociatedValue("lastUpdate", initialValue: Date() ) }
+        set { setAssociatedValue(newValue, key: "lastUpdate") }
     }
 
     #if os(macOS)
@@ -162,11 +202,11 @@ public extension Progress {
         }
     }
 
-    internal func setupEstimatedTimeProgressObserver(_ shouldObserve: Bool = false) {
-        if shouldObserve {
+    internal func setupEstimatedTimeProgressObserver() {
+        if autoUpdateEstimatedTimeRemaining {
             if estimatedTimeProgressObserver == nil {
                 estimatedTimeProgressObserver = KeyValueObserver(self)
-
+                
                 estimatedTimeProgressObserver?.add(\.isPaused) { old, new in
                     guard old != new else { return }
                     self.estimatedTimeStartDate = Date()
@@ -181,11 +221,59 @@ public extension Progress {
 
                 estimatedTimeProgressObserver?.add(\.fractionCompleted, sendInitalValue: true) { old, new in
                     guard old != new else { return }
+                    self.lastUpdate = Date()
                     self.updateEstimatedTimeRemaining()
                 }
             }
         } else {
+            delayedEstimatedTimeRemainingUpdate?.cancel()
             estimatedTimeProgressObserver = nil
         }
+    }
+}
+
+extension Progress {
+    var progressSamples: [(date: Date, completedUnitCount: Int64)] {
+        get { getAssociatedValue("progressSamples", initialValue: []) }
+        set { setAssociatedValue(newValue, key: "progressSamples") }
+    }
+            
+    func refreshThroughputAndEstimatedTimeRemaining() {
+        let progressSampleLimitTimeInterval: TimeInterval = 10.0
+        let progressSampleLimitCount = 30
+        
+      //  estimateTimeEvaluationTimeInterval
+        
+        progressSamples.append((Date(), completedUnitCount))
+        progressSamples = progressSamples.filter({ $0.date > Date(timeIntervalSinceNow: -progressSampleLimitTimeInterval) }).suffix(progressSampleLimitCount)
+        refreshThroughput()
+        refreshEstimatedTimeRemaining()
+    }
+    
+    func refreshEstimatedTimeRemaining() {
+        let throughputAsDouble = Double(throughput ?? 0)
+        guard let completedUnitCount = progressSamples.last?.completedUnitCount, throughputAsDouble != 0 else {
+            estimatedTimeRemaining = nil
+            return
+        }
+        let remainingUnitCount = max(0, Int(totalUnitCount - completedUnitCount))
+        estimatedTimeRemaining = Double(remainingUnitCount) / throughputAsDouble
+    }
+    
+    func refreshThroughput() {
+        guard progressSamples.count > 1 else {
+            throughput = 0
+            return
+        }
+        var throughputs = [Int]()
+        for index in 0..<progressSamples.count-1 {
+            let startSample = progressSamples[index]
+            let endSample = progressSamples[index+1]
+            let completedUnitCount = max(0, endSample.completedUnitCount - startSample.completedUnitCount)
+            let timeInterval = max(Double.leastNonzeroMagnitude, endSample.date.timeIntervalSince(startSample.date))
+            throughputs.append(Int(Double(completedUnitCount) / timeInterval))
+        }
+        guard throughputs.count > 0 else { return }
+        throughput = throughputs.reduce(0, +) / throughputs.count
     }
 }

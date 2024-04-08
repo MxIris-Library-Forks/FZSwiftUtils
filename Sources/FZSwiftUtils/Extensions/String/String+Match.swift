@@ -8,29 +8,23 @@
 import Foundation
 import NaturalLanguage
 
-public extension String {
-    ///  A structure representing a match found in a string.
-    struct StringMatch: Hashable {
-        /// The matched string.
-        public let string: String
-        /// The range of the matched string within the source string.
-        public let range: Range<String.Index>
-        /// The score or importance of the match.
-        public let score: Int
-
-        init(string: String, range: Range<String.Index>, score: Int) {
-            self.string = string
-            self.range = range
-            self.score = score
-        }
-
-        init(_ result: NSTextCheckingResult, source: String) {
-            range = Range(result.range, in: source)!
-            string = String(source[range])
-            score = source.distance(from: range.lowerBound, to: range.upperBound)
-        }
+///  A structure representing a match found in a string.
+public struct StringMatch: Hashable {
+    /// The matched string.
+    public let string: String
+    /// The range of the matched string within the source string.
+    public let range: Range<String.Index>
+    /// The score or importance of the match.
+    public let score: Int
+    
+    init(range: Range<String.Index>, in string: String) {
+        self.string = String(string[range])
+        self.range = range
+        self.score = string.distance(from: range.lowerBound, to: range.upperBound)
     }
+}
 
+public extension String {
     /// Options for matching strings.
     enum StringMatchOption: Int, Hashable {
         /// Characters.
@@ -88,31 +82,33 @@ public extension String {
      - Returns: An array of `StringMatch` objects representing the matches found.
      */
     func matches(regex: String) -> [StringMatch] {
-        let string = self
-        let regex = try? NSRegularExpression(pattern: regex, options: [])
-        return regex?.matches(in: string, range: NSRange(string.startIndex..., in: string)).compactMap { 
-            
-            StringMatch($0, source: string) } ?? []
+        guard let regex = try? NSRegularExpression(pattern: regex, options: []) else { return [] }
+        return regex.matches(in: self, range: NSRange(self.startIndex..., in: self)).flatMap({ $0.matches(in: self) })
     }
-    
-    /// All integer values inside the string.
-    var integerValues: [Int] {
-        matches(regex: "[-+]?\\d+.?\\d+").compactMap({Int($0.string)})
-    }
-    
-    /// All double values inside the string.
-    var doubleValues: [Double] {
-        matches(regex: "[-+]?\\d+.?\\d+").compactMap({Double($0.string.replacingOccurrences(of: ",", with: "."))})
-    }
-    
-    /*
-    func matchesAlt(regex: String) -> [StringMatch] {
-        let string = self
-        let regex = try? NSRegularExpression(pattern: regex, options: [])
-        return regex?.matches(in: string, range: NSRange(string.startIndex..., in: string)).compactMap { StringMatch($0, source: string) } ?? []
-    }
-     */
+        
+    /**
+     Finds all matches for the given option using natural language processing.
 
+     - Parameter option: The option for finding matches (e.g. finding phone numbers, quotes, etc.)
+     - Returns: An array of `StringMatch` objects representing the matches found.
+      */
+    func matches(for option: NSTextCheckingResult.CheckingType) -> [StringMatch] {
+        var option = option
+        let checkOnlyEmail = option.contains(.emailAddress) && !option.contains(.link)
+        if option.contains(.emailAddress) {
+            option.remove(.emailAddress)
+            option.insert(.link)
+        }
+        guard let detector = try? NSDataDetector(types: option.rawValue) else { return [] }
+        return detector.matches(in: self, range: NSRange(self.startIndex..., in: self)).flatMap({ match in
+            (0..<match.numberOfRanges).compactMap {
+                if match.resultType == .link, checkOnlyEmail, match.emailAddress == nil { return nil }
+                guard let range = Range(match.range(at: $0), in: self) else { return nil }
+                return StringMatch(range: range, in: self)
+            }
+        })
+    }
+    
     /**
      Finds all matches of substrings between the two specified strings.
 
@@ -124,20 +120,12 @@ public extension String {
      - Returns: An array of `StringMatch` objects representing the matches found.
      */
     func matches(between fromString: String, and toString: String, includingFromTo: Bool = false) -> [StringMatch] {
-        let pattern = fromString + "(.*?)" + toString
-        var matches = matches(regex: pattern)
+        let pattern = NSRegularExpression.escapedPattern(for: fromString) + "(.*?)" + NSRegularExpression.escapedPattern(for: toString)
+        let matches = matches(regex: pattern)
         if includingFromTo == false {
-            matches = matches.compactMap { match in
-                let lowerBound = self.index(match.range.lowerBound, offsetBy: fromString.count)
-                let upperBound = self.index(match.range.upperBound, offsetBy: -toString.count)
-                let range = lowerBound ..< upperBound
-                let score = self.distance(from: range.lowerBound, to: range.upperBound)
-                
-                let string = String(match.string.dropFirst(fromString.count).dropLast(toString.count))
-                return StringMatch(string: string, range: range, score: score)
-            }
+            return matches.filter({!$0.string.hasPrefix(fromString) && !$0.string.hasSuffix(toString)})
         }
-        return matches
+        return matches.filter({$0.string.hasPrefix(fromString) && $0.string.hasSuffix(toString)})
     }
 
     /**
@@ -148,12 +136,9 @@ public extension String {
      */
     func matches(for option: StringMatchOption) -> [StringMatch] {
         var matches: [StringMatch] = []
-
         enumerateSubstrings(in: startIndex..., options: option.enumerationOptions) { _, range, _, _ in
-            let score = self.distance(from: range.lowerBound, to: range.upperBound)
-            matches.append(StringMatch(string: String(self[range]), range: range, score: score))
+            matches.append(StringMatch(range: range, in: self))
         }
-
         return matches
     }
 
@@ -167,7 +152,7 @@ public extension String {
         var matches: [StringMatch] = []
         let tagger = NLTagger(tagSchemes: [.nameType])
         tagger.string = self
-
+        
         let tags = tagger.tags(
             in: startIndex ..< endIndex,
             unit: .word,
@@ -181,20 +166,20 @@ public extension String {
         )
         for (tag, range) in tags {
             if tag == option {
-                let score = distance(from: range.lowerBound, to: range.upperBound)
-                matches.append(StringMatch(string: String(self[range]), range: range, score: score))
+                matches.append(StringMatch(range: range, in: self))
             }
         }
         return matches
     }
-}
-
-public extension StringProtocol {
-    /// Returns a new string made by removing all emoji characters.
-    func trimmingEmojis() -> String {
-        unicodeScalars
-            .filter { !$0.properties.isEmojiPresentation && !$0.properties.isEmoji }
-            .reduce(into: "") { $0 += String($1) }
+    
+    /// All integer values inside the string.
+    var integerValues: [Int] {
+        matches(regex: "[-+]?\\d+.?\\d+").compactMap({Int($0.string)})
+    }
+    
+    /// All double values inside the string.
+    var doubleValues: [Double] {
+        matches(regex: "[-+]?\\d+.?\\d+").compactMap({Double($0.string.replacingOccurrences(of: ",", with: "."))})
     }
 }
 
@@ -225,5 +210,12 @@ public extension StringProtocol {
             }
         }
         return true
+    }
+    
+    /// Returns a new string made by removing all emoji characters.
+    func trimmingEmojis() -> String {
+        unicodeScalars
+            .filter { !$0.properties.isEmojiPresentation && !$0.properties.isEmoji }
+            .reduce(into: "") { $0 += String($1) }
     }
 }

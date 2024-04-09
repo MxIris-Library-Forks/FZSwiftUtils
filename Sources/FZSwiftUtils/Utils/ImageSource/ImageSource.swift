@@ -303,26 +303,36 @@ extension ImageSource {
     import AppKit
     public extension ImageSource {
         /**
-         Creates an image source that reads from a NSImage,
+         Creates an image source that reads from a `NSImage`.
+         
+         - Note: Loading an animated image takes time as each image frame is loaded initially. It's recommended to either use the url to the image if available, or parse the animation properties and frames via the image's `NSBitmapImageRep` representation.
 
          - Parameters:
-            - image: The NSImage object.
+            - image: The `NSImage` object.
          */
         convenience init?(image: NSImage) {
-            guard let data = image.tiffRepresentation else { return nil }
-            self.init(data: data)
+            let images = image.representations.compactMap({$0 as? NSBitmapImageRep}).flatMap({$0.getImages()})
+            guard !images.isEmpty else { return nil }
+            let types = Set(images.compactMap { $0.utType })
+            let outputType = types.count == 1 ? (types.first ?? kUTTypeTIFF) : kUTTypeTIFF
+            guard let mutableData = CFDataCreateMutable(nil, 0), let destination = CGImageDestinationCreateWithData(mutableData, outputType, images.count, nil) else { return nil }
+            images.forEach { CGImageDestinationAddImage(destination, $0, nil) }
+            guard CGImageDestinationFinalize(destination) else { return nil }
+            guard let cgImageSource = CGImageSourceCreateWithData(mutableData, nil) else { return nil }
+            self.init(cgImageSource)
         }
     }
+
 #endif
 
 #if canImport(UIKit)
     import UIKit
     public extension ImageSource {
         /**
-         Creates an image source that reads from a UIImage,
+         Creates an image source that reads from a `UIImage`.
 
          - Parameters:
-            - image: The UIImage object.
+            - image: The `UIImage` object.
          */
         convenience init?(image: UIImage) {
             guard let data = image.pngData() else { return nil }

@@ -507,45 +507,44 @@ private extension objc_property_t {
 }
 
 private let valueTypesMap: [String: Any] = {
-    #if os(macOS) || canImport(UIKit)
-    _valueTypesMap + 
-    ["CGAffineTransform": CGAffineTransform.self,
-    "{CATransform3D=dddddddddddddddd}": CATransform3D.self,
-    "r^{CGPath=}": CGPath.self,
-    "CATransform3D": CATransform3D.self,
-    "CGPath": CGPath.self,]
-    #else
-     _valueTypesMap
+    var valueTypesMap = [
+        "c": Int8.self,
+        "s": Int16.self,
+        "#": AnyClass.self,
+        ":": Selector.self,
+        "i": Int32.self,
+        "q": Int.self, // also: Int64, NSInteger, only true on 64 bit platforms
+        "S": UInt16.self,
+        "I": UInt32.self,
+        "Q": UInt.self, // also UInt64, only true on 64 bit platforms
+        "B": Bool.self,
+        "d": Double.self,
+        "f": Float.self,
+        "{": Decimal.self,
+        "@?": (()->()).self,
+        "{CGSize=dd}": CGSize.self,
+        "{CGPoint=dd}": CGPoint.self,
+        "{_NSRange=QQ}": _NSRange.self,
+        "{CGRect={CGPoint=dd}{CGSize=dd}}": CGRect.self,
+        "{CGAffineTransform=dddddd}": CGAffineTransform.self,
+        "CGAffineTransform": CGAffineTransform.self,
+        "CGSize": CGSize.self,
+        "CGPoint": CGPoint.self,
+        "_NSRange": _NSRange.self,
+        "CGRect": CGRect.self,
+        "r^{CGPath=}": CGPath.self,
+        "CGPath": CGPath.self,
+    ]
+    #if os(macOS) || os(iOS) || os(tvOS)
+    valueTypesMap += ["{CATransform3D=dddddddddddddddd}": CATransform3D.self, "CATransform3D": CATransform3D.self]
     #endif
+    #if os(macOS)
+    valueTypesMap += [ "{NSEdgeInsets=dddd}": NSUIEdgeInsets.self, "NSEdgeInsets": NSUIEdgeInsets.self]
+    #elseif canImport(UIKit)
+    valueTypesMap += [ "{UIEdgeInsets=dddd}": NSUIEdgeInsets.self, "UIEdgeInsets": NSUIEdgeInsets.self]
+    #endif
+    return valueTypesMap
 }()
-
-private let _valueTypesMap: [String: Any] = [
-    "c": Int8.self,
-    "s": Int16.self,
-    "#": AnyClass.self,
-    ":": Selector.self,
-    "i": Int32.self,
-    "q": Int.self, // also: Int64, NSInteger, only true on 64 bit platforms
-    "S": UInt16.self,
-    "I": UInt32.self,
-    "Q": UInt.self, // also UInt64, only true on 64 bit platforms
-    "B": Bool.self,
-    "d": Double.self,
-    "f": Float.self,
-    "{": Decimal.self,
-    "@?": (()->()).self,
-    "{CGSize=dd}": CGSize.self,
-    "{CGPoint=dd}": CGPoint.self,
-    "{_NSRange=QQ}": _NSRange.self,
-    "{NSEdgeInsets=dddd}": NSEdgeInsets.self,
-    "{CGRect={CGPoint=dd}{CGSize=dd}}": CGRect.self,
-    "{CGAffineTransform=dddddd}": CGAffineTransform.self,
-    "CGSize": CGSize.self,
-    "CGPoint": CGPoint.self,
-    "_NSRange": _NSRange.self,
-    "NSEdgeInsets": NSEdgeInsets.self,
-    "CGRect": CGRect.self,
-]
 
 private struct Unknown: CustomStringConvertible {
     let type: String
@@ -561,7 +560,7 @@ private struct StructType: CustomStringConvertible {
     public let values: [Any]
     init(_ string: String) {
         let string = String(string.dropFirst(3).dropLast(3))
-        let matches = string.matches(regex: #"\{(.*?)=\w+\}"#).compactMap({$0.string}).filter({!$0.hasPrefix("{") && !$0.hasSuffix("}")})
+        let matches = string.matches(pattern: #"\{(.*?)=\w+\}"#).compactMap({$0.string}).filter({!$0.hasPrefix("{") && !$0.hasSuffix("}")})
         values = matches.compactMap({$0.toType()})
     }
     
@@ -585,7 +584,7 @@ private extension String {
         } else if let type = NSProtocolFromString(self.withoutBrackets) {
             return type
         } else {
-            let matches = self.matches(regex: #"\{(.*?)=\w*\}"#).compactMap({$0.string})
+            let matches = self.matches(pattern: #"\{(.*?)=\w*\}"#).compactMap({$0.string})
             if matches.count == 2, let match = matches.last {
                 return match.toType()
             }

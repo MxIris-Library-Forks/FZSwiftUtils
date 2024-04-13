@@ -27,6 +27,6 @@ extension CharacterSet {
 
 extension Array where Element == CharacterSet {
     public var union: CharacterSet {
-        return reduce(into: CharacterSet()) { $0 += $1 }
+        reduce(into: CharacterSet()) { $0 += $1 }
     }
 }

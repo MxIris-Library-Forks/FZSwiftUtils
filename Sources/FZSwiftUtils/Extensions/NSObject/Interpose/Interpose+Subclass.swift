@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import _SuperBuilder
 
 class InterposeSubclass {
 
@@ -97,7 +98,7 @@ class InterposeSubclass {
     }
 
     class var supportsSuperTrampolines: Bool {
-        NSClassFromString("SuperBuilder")?.value(forKey: "isSupportedArchitecure") as? Bool ?? false
+        _SuperBuilder.isSupportedArchitecure
     }
 
     private lazy var addSuperImpl: @convention(c) (AnyClass, Selector, NSErrorPointer) -> Bool = {

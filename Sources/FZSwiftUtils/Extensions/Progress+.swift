@@ -40,7 +40,7 @@ extension Progress {
         }
     }
     
-    func refreshEstimatedTimeRemaining() {
+    private func refreshEstimatedTimeRemaining() {
         guard !isCompleted else {
             estimatedTimeRemaining = 0
             return
@@ -52,18 +52,6 @@ extension Progress {
         }
         let remainingUnitCount = max(0, Int(totalUnitCount - completedUnitCount))
         estimatedTimeRemaining = Double(remainingUnitCount) / throughput
-    }
-    
-    func refreshEstimatedTimeRemainingAlt() -> TimeInterval? {
-        guard !isCompleted else {
-            return 0
-        }
-        let throughput = Double(throughput ?? 0)
-        guard !isCancelled, let completedUnitCount = progressSamples.last?.completed, throughput != 0 else {
-            return nil
-        }
-        let remainingUnitCount = max(0, Int(totalUnitCount - completedUnitCount))
-        return Double(remainingUnitCount) / throughput
     }
     
     /**
@@ -136,42 +124,38 @@ extension Progress {
             }
         }
     }
-    
+
     /// The time interval for calculating the estimate time remaining and throughput via ``updateEstimatedTimeRemaining()``.
     public var estimateTimeEvaluationTimeInterval: TimeInterval {
         get { getAssociatedValue("estimateTimeInterval", initialValue: 30) }
         set { setAssociatedValue(newValue.clamped(min: 0.1), key: "estimateTimeInterval") }
     }
     
-    var estimatedTimeProgressObserver: KeyValueObserver<Progress>? {
+    private var estimatedTimeProgressObserver: KeyValueObserver<Progress>? {
         get { getAssociatedValue("estimatedTimeProgressObserver", initialValue: nil) }
         set { setAssociatedValue(newValue, key: "estimatedTimeProgressObserver") }
     }
     
-    var delayedEstimatedTimeRemainingUpdate: DispatchWorkItem? {
+    private var delayedEstimatedTimeRemainingUpdate: DispatchWorkItem? {
         get { getAssociatedValue("delayedEstimatedTimeRemainingUpdate", initialValue: nil ) }
         set { setAssociatedValue(newValue, key: "delayedEstimatedTimeRemainingUpdate") }
     }
     
     /// ETA progress samples.
-    var progressSamples: [(date: Date, changed: Int64, completed: Int64)] {
+    private var progressSamples: [(date: Date, changed: Int64, completed: Int64)] {
         get { getAssociatedValue("progressSamples", initialValue: []) }
         set { setAssociatedValue(newValue, key: "progressSamples") }
     }
     
     /// The maximum amount of ETA progress samples.
-    var progressSampleLimitCount: Int {
-        30
-    }
+    private var progressSampleLimitCount: Int { 30 }
     
-    var estimateTimeUpdateCount: Int {
+    private var estimateTimeUpdateCount: Int {
         get { getAssociatedValue("estimateTimeUpdateCount", initialValue: 0) }
         set { setAssociatedValue(newValue, key: "estimateTimeUpdateCount") }
     }
     
-    var maxEstimateTimeUpdateCount: Int {
-        4
-    }
+    private var maxEstimateTimeUpdateCount: Int { 4 }
     
     /// A Boolean value that indicates whether progress is completed.
     var isCompleted: Bool {
@@ -180,16 +164,14 @@ extension Progress {
 
     #if os(macOS)
         /**
-         The progress will be shown as a progress bar in the Finder for the given url.
+         The progress will be shown as a progress bar in the Finder for the specified file url.
 
          - Parameters:
             -   url: The URL of the file.
-            - kind: The kind of the file operation.
-
-         - Warning: Don't call this method if the progress is already published.
+            - kind: The file operation kind.
          */
         public func addFileProgress(url: URL, kind: FileOperationKind = .downloading) {
-            guard fileURL != url else { return }
+            guard fileURL != url, !isCompleted, !isCancelled else { return }
             fileURL = url
             fileOperationKind = kind
             self.kind = .file
@@ -200,31 +182,25 @@ extension Progress {
         }
 
         /**
-         Creates a file progress.
-
-         A file progress will show a progress bar in the Finder. If `cancellationHandler` is provided, the user will be able to cancel the progress. If `pauseHandler` is provided, the user will be able to pause the progress.
+         Creates a file progress that shows a progress bar in the Finder for the specified file url.
 
          - Parameters:
             - url: The URL of the file.
-            - kind: The kind of the file operation.
-            - size: The size of the file in `DataSize` format.
-            - pauseHandler: The block to invoke when pausing progress. If a handler is provided, the progress will be pausable.
-            - cancellationHandler: he block to invoke when canceling progress. If a handler is provided, the progress will be cancellable.
+            - kind: The file operation kind.
+            - completed: The completed size of the file.
+            - size: The size of the file.
 
          - Returns: A `Progress` object representing the file progress.
          */
         public static func file(url: URL, kind: Progress.FileOperationKind, completed: DataSize? = nil, size: DataSize? = nil) -> Progress {
             let progress = Progress()
-            progress.kind = .file
-            progress.fileURL = url
-            progress.fileOperationKind = kind
             progress.totalUnitCount = Int64(size?.bytes ?? 0)
-            progress.completedUnitCount = Int64(completed?.bytes ?? Int(progress.completedUnitCount))
-            progress.publish()
+            progress.completedUnitCount = Int64(completed?.bytes ?? 0)
+            progress.addFileProgress(url: url, kind: kind)
             return progress
         }
     
-    var isPublished: Bool {
+    private var isPublished: Bool {
         get { getAssociatedValue("isPublished", initialValue: false) }
         set { setAssociatedValue(newValue, key: "isPublished") }
     }

@@ -139,6 +139,11 @@ extension NSObject {
         return ClassReflection(type: self, properties: properties, methods: methods, ivars: ivars, classProperties: classProperties, classMethods: classMethods, classIvars: classIvars)
     }
     
+    /// Returns a reflection of the class with the specified name.
+    public static func classReflection(for className: String, includeSuperclass: Bool = false) -> ClassReflection? {
+        (NSClassFromString(className) as? NSObject.Type)?.classReflection(includeSuperclass: includeSuperclass)
+    }
+    
     /**
      Returns all property descriptions of the class.
      
@@ -247,7 +252,7 @@ extension NSObject {
             let name = NSStringFromSelector(method_getName(method))
             let returnType = method.returnType.toType()
             var argumentTypes: [Any] = []
-            for index in 0..<method.numberOfArguments {
+            for index in 0..<method.numberOfArguments.clamped(min: 0) {
                 argumentTypes.append(method.argumentType(at: index).toType())
             }
             let description = MethodDescription(name: name, argumentTypes: argumentTypes, returnType: returnType)

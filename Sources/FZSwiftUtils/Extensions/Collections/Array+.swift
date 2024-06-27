@@ -33,6 +33,13 @@ public extension Array {
     }
 }
 
+public extension Array where Element: Hashable {
+    /// Set with the elements of the array.
+    var asSet: Set<Element> {
+        Set(self)
+    }
+}
+
 extension Array: Comparable where Element: Comparable {
     public static func < (lhs: [Element], rhs: [Element]) -> Bool {
         for (leftElement, rightElement) in zip(lhs, rhs) {
@@ -43,5 +50,19 @@ extension Array: Comparable where Element: Comparable {
             }
         }
         return lhs.count < rhs.count
+    }
+}
+
+public extension ArraySlice {
+    /// Array with the elements of the array slice.
+    var asArray: [Element] {
+        Array(self)
+    }
+}
+
+public extension ArraySlice where Element: Hashable {
+    /// Set with the elements of the array slice.
+    var asSet: Set<Element> {
+        Set(self)
     }
 }

@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// A protocol that represents a pausable object.
+/// A type that can be paused.
 public protocol Pausable {
     /// Pauses the object.
     func pause()
@@ -21,73 +21,78 @@ public protocol Pausable {
 open class PausableOperationQueue: OperationQueue {
     /// The operations currently in the queue.
     open private(set) var pausableOperations: [Pausable & Operation] = []
-
-    lazy var sequentialOperationsQueue = {
-        var queue = OperationQueue()
-        queue.maxConcurrentOperationCount = 1
-        return queue
-    }()
+    
+    let sequentialOperationQueue = OperationQueue(maxConcurrentOperationCount: 1)
 
     let _progress = MutableProgress()
 
     override open var progress: Progress { _progress }
 
     override open func addOperation(_ op: Operation) {
-        let completionBlock = op.completionBlock
-        if let pausableOperation = op as? (Pausable & Operation) {
-            op.completionBlock = {
-                self.sequentialOperationsQueue.addOperation {
-                    if let index = self.pausableOperations.firstIndex(where: { $0 == op }) {
-                        self.pausableOperations.remove(at: index)
-                    }
-                }
-                completionBlock?()
-            }
-            sequentialOperationsQueue.addOperation {
-                self.pausableOperations.append(pausableOperation)
-            }
-        }
-        super.addOperation(op)
+        addOperations([op], waitUntilFinished: false)
     }
 
     override open func addOperations(_ ops: [Operation], waitUntilFinished wait: Bool) {
-        let pausableOperations = ops.compactMap { $0 as? (Pausable & Operation) }
-        pausableOperations.forEach { operation in
+        for operation in ops {
+            if let operation = operation as? ProgressReporting & Operation {
+                _progress.addChild(operation.progress)
+            } else {
+                progress.totalUnitCount += 1
+                let completionBlock = operation.completionBlock
+                operation.completionBlock = {
+                    if operation.isCancelled {
+                        self.progress.totalUnitCount -= 1
+                    } else {
+                        self.progress.completedUnitCount += 1
+                    }
+                    completionBlock?()
+                }
+            }
+        }
+        
+        ops.compactMap { $0 as? (Pausable & Operation) }.forEach { operation in
             let completionBlock = operation.completionBlock
             operation.completionBlock = {
-                self.sequentialOperationsQueue.addOperation {
+                self.sequentialOperationQueue.addOperation {
                     if let index = self.pausableOperations.firstIndex(where: { $0 == operation }) {
                         self.pausableOperations.remove(at: index)
                     }
                 }
                 completionBlock?()
             }
-        }
-        sequentialOperationsQueue.addOperation {
-            self.pausableOperations.append(contentsOf: pausableOperations)
+            sequentialOperationQueue.addOperation {
+                self.pausableOperations.append(operation)
+            }
         }
         super.addOperations(ops, waitUntilFinished: wait)
+    }
+    
+    /// A Boolean value indicating whether the queue is paused.
+    open var isPaused: Bool = false {
+        didSet {
+            guard oldValue != isPaused else { return }
+            isSuspended = isPaused
+            sequentialOperationQueue.addOperation {
+                self.pausableOperations.filter(\.isExecuting).forEach { 
+                    if self.isPaused { $0.pause() } else { $0.resume() }
+                }
+            }
+        }
     }
 
     /// Pauses the queue.
     open func pause() {
-        isSuspended = true
-        sequentialOperationsQueue.addOperation {
-            self.pausableOperations.filter(\.isExecuting).forEach { $0.pause() }
-        }
+        isPaused = true
     }
 
-    /// Resznes the queue.
+    /// Resumes the queue.
     open func resume() {
-        isSuspended = false
-        sequentialOperationsQueue.addOperation {
-            self.pausableOperations.filter(\.isExecuting).forEach { $0.resume() }
-        }
+        isPaused = false
     }
 
     override open func cancelAllOperations() {
         super.cancelAllOperations()
-        sequentialOperationsQueue.addOperation {
+        sequentialOperationQueue.addOperation {
             self.pausableOperations.removeAll()
         }
     }

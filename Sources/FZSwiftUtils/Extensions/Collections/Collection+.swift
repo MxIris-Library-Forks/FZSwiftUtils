@@ -317,7 +317,7 @@ public extension RangeReplaceableCollection where Self.Indices.Element == Int, E
      */
     @discardableResult
     mutating func move(_ element: Element, to destinationIndex: Self.Indices.Element) -> Bool {
-        let indexes = indexes(for: [element])
+        let indexes = indexes(of: element)
         return move(from: indexes, to: destinationIndex)
     }
 
@@ -347,7 +347,7 @@ public extension RangeReplaceableCollection where Self.Indices.Element == Int, E
      */
     @discardableResult
     mutating func move(_ element: Element, before beforeElement: Element) -> Bool {
-        let indexes = indexes(for: [element])
+        let indexes = indexes(of: element)
         guard let destinationIndex = firstIndex(of: beforeElement) else { return false }
         return move(from: indexes, to: destinationIndex)
     }
@@ -568,30 +568,42 @@ public extension RangeReplaceableCollection where Element: Equatable {
 }
 
 public extension Collection where Element: BinaryInteger {
-    /// The average value of all values in the collection. If the collection is empty, it returns 0.
+    /// The average value of all values in the collection. If the collection is empty, it returns `0`.
     func average() -> Double {
         guard !isEmpty else { return .zero }
         return Double(reduce(.zero, +)) / Double(count)
     }
     
-    /// Weighted average value of all values in the collection. If the collection is empty, it returns 0.
+    /// The weighted average value of all values in the collection. If the collection is empty, it returns `0`.
     func weightedAverage() -> Double {
         compactMap({Double($0)}).weightedAverage()
     }
     
-    /// Weighted average value of all values in the collection. If the collection is empty, it returns 0.
+    /**
+     The weighted average value of all values in the collection. If the collection is empty, it returns `0`.
+     
+     - Parameter weights: The weight for each element in the collection.
+     
+     - Note: `weights` needs to have the same number of elements as the collection.
+     */
     func weightedAverage(weights: [Double]) -> Double {
         compactMap({Double($0)}).weightedAverage(weights: weights)
     }
     
-    /// Weighted average value of all values in the collection. If the collection is empty, it returns 0.
+    /**
+     The weighted average value of all values in the collection. If the collection is empty, it returns `0`.
+     
+     The first value of the collection is weighted by the upper bound value of the range and the last value by the lower bound value of the range.
+     
+     - Parameter weighting: The range of the weights.
+     */
     func weightedAverage(weighting: ClosedRange<Double>) -> Double {
         compactMap({Double($0)}).weightedAverage(weighting: weighting)
     }
 }
 
 public extension Collection where Element: FloatingPoint {
-    /// The average value of all values in the collection. If the collection is empty, it returns 0.
+    /// The average value of all values in the collection. If the collection is empty, it returns `0`.
     func average() -> Element {
         guard !isEmpty else { return .zero }
         return reduce(.zero, +) / Element(count)
@@ -599,7 +611,7 @@ public extension Collection where Element: FloatingPoint {
 }
 
 public extension Collection where Element: BinaryFloatingPoint {
-    /// Weighted average value of all values in the collection. If the collection is empty, it returns 0.
+    /// The weighted average value of all values in the collection. If the collection is empty, it returns `0`.
     func weightedAverage() -> Element {
         var weights: [Element] = []
         var value: Element = 1.0
@@ -611,24 +623,34 @@ public extension Collection where Element: BinaryFloatingPoint {
         return weightedAverage(weights: weights)
     }
     
-    /// Weighted average value of all values in the collection. If the collection is empty, it returns 0.
+    /**
+     The weighted average value of all values in the collection. If the collection is empty, it returns `0`.
+     
+     - Parameter weights: The weight for each element in the collection.
+     
+     - Note: `weights` needs to have the same number of elements as the collection.
+     */
     func weightedAverage(weights: [Element]) -> Element {
         guard !isEmpty, count == weights.count else { return .zero }
         let totalWeight = weights.sum()
         guard totalWeight > 0 else { return .zero }
-        return zip(self, weights)
-                .map { $0 * $1 }
-                .reduce(.zero, +) / totalWeight
+        return zip(self, weights).map { $0 * $1 }.reduce(.zero, +) / totalWeight
     }
     
-    /// Weighted average value of all values in the collection. If the collection is empty, it returns 0.
+    /**
+     The weighted average value of all values in the collection. If the collection is empty, it returns `0`.
+          
+     The first value of the collection is weighted by the upper bound value of the range and the last value by the lower bound value of the range.
+
+     - Parameter weighting: The range of the weights.
+     */
     func weightedAverage(weighting: ClosedRange<Element>) -> Element {
         var weights: [Element] = []
         let range = weighting.upperBound-weighting.lowerBound
-        let divider: Element = 1.0/Element(count)
+        let divider: Element = 1.0/Element(count-1)
         var value: Element = 1.0
         for _ in 0..<count {
-            weights.append(range*value)
+            weights.append((range*value)+weighting.lowerBound)
             value = value - divider
         }
         return weightedAverage(weights: weights)
@@ -638,14 +660,22 @@ public extension Collection where Element: BinaryFloatingPoint {
 public extension RangeReplaceableCollection {
     /**
      Returns the collection rotated by the specified amount of positions.
+     
+     Example:
+     
+     ```swift
+     let values = [1, 2, 3, 4, 5]
+     print(values.rotated(by: 1)) // [5, 1, 2, 3, 4]
+     ```
 
-     - Parameter positions: The amount of positions to rotate. A value larger than 0 rotates the collection to the right, a value smaller than 0 left.
+     - Parameter positions: The amount of positions to rotate. A value larger than `0` rotates the collection to the right, a value smaller than `0` left.
      - Returns: The rotated collection.
      */
-    func rotated(positions: Int) -> Self {
-        guard positions != 0 else { return self }
+    func rotated(by positions: Int) -> Self {
+        guard !isEmpty else { return self }
+        let positions = positions.quotientAndRemainder(dividingBy: count).remainder
+        guard positions != .zero else { return self }
         let index: Index
-        let positions = -positions
         if positions > 0 {
             index = self.index(endIndex, offsetBy: -positions, limitedBy: startIndex) ?? startIndex
         } else {
@@ -656,21 +686,19 @@ public extension RangeReplaceableCollection {
 
     /**
      Rotates the collection by the specified amount of positions.
+     
+     Example:
+     
+     ```swift
+     var values = [1, 2, 3, 4, 5]
+     values.rotate(by: 1)
+     print(values) // [5, 1, 2, 3, 4]
+     ```
 
-     - Parameter positions: The amount of positions to rotate. A value larger than 0 rotates the collection to the right, a value smaller than 0 left.
+     - Parameter positions: The amount of positions to rotate. A value larger than `0` rotates the collection to the right, a value smaller than `0` left.
      */
-    mutating func rotate(positions: Int) {
-        guard positions != 0 else { return }
-        let positions = -positions
-        if positions > 0 {
-            let index = index(endIndex, offsetBy: -positions, limitedBy: startIndex) ?? startIndex
-            removeSubrange(index...)
-            insert(contentsOf: self[index...], at: startIndex)
-        } else {
-            let index = index(startIndex, offsetBy: -positions, limitedBy: endIndex) ?? endIndex
-            removeSubrange(..<index)
-            insert(contentsOf: self[..<index], at: endIndex)
-        }
+    mutating func rotate(by positions: Int) {
+        self = self.rotated(by: positions)
     }
 }
 
@@ -692,7 +720,21 @@ public extension RangeReplaceableCollection {
      */
     mutating func removeFirstSafetly(_ k: Int) {
         guard !isEmpty else { return }
-        removeFirst(Swift.min(count, self.count))
+        removeFirst(Swift.min(k, count))
+    }
+    
+    /**
+     Removes and returns the specified number of elements from the beginning of the collection.
+     
+     - Parameter k: The number of elements to remove from the collection. k must be greater than or equal to `zero`.`
+     - Returns: The removed elements.
+     */
+    @discardableResult
+    mutating func removeFirstSafetly(_ k: Int) -> [Element] where Index == Int {
+        guard !isEmpty else { return [] }
+        let values = self[safe: 0..<k]
+        removeFirst(Swift.min(k, count))
+        return values
     }
     
     /**
@@ -701,8 +743,6 @@ public extension RangeReplaceableCollection {
      - Returns: The last element of the collection, or `nil` if the collection is empty.
      */
     mutating func removeLastSafetly() -> Element? where Self: BidirectionalCollection {
-        var testArray = [0, 1]
-        print(testArray.removeLast())
         guard !isEmpty else { return nil }
         return removeLast()
     }
@@ -714,6 +754,19 @@ public extension RangeReplaceableCollection {
      */
     mutating func removeLastSafetly(_ k: Int) where Self: BidirectionalCollection {
         guard !isEmpty else { return }
-        removeLast(Swift.min(count, self.count))
+        removeLast(Swift.min(k, count))
+    }
+    
+    /**
+     Removes and returns the specified number of elements from the end of the collection.
+          
+     - Parameter k: The number of elements to remove from the collection. k must be greater than or equal to `zero`.
+     */
+    @discardableResult
+    mutating func removeLastSafetly(_ k: Int) -> [Element] where Index == Int {
+        guard !isEmpty else { return [] }
+        let values = self[safe: Swift.max(count-k, 0)..<count]
+        removeFirst(Swift.min(k, count))
+        return values
     }
 }

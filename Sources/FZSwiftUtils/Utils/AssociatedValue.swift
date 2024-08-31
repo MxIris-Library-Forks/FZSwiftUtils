@@ -57,7 +57,7 @@ public func getAssociatedValue<T>(_ key: String, object: AnyObject, initialValue
     - object: The object of the associated value.
  */
 public func setAssociatedValue<T>(_ value: T?, key: String, object: AnyObject) {
-    set(associatedValue: AssociatedValue(value), key: key, object: object)
+    setAssociatedValue(AssociatedValue(value), key: key, object: object)
 }
 
 /**
@@ -69,11 +69,11 @@ public func setAssociatedValue<T>(_ value: T?, key: String, object: AnyObject) {
     - object: The object of the associated value.
  */
 public func setAssociatedValue<T: AnyObject>(weak value: T?, key: String, object: AnyObject) {
-    set(associatedValue: AssociatedValue(weak: value), key: key, object: object)
+    setAssociatedValue(AssociatedValue(weak: value), key: key, object: object)
 }
 
-private func set(associatedValue: AssociatedValue, key: String, object: AnyObject) {
-    objc_setAssociatedObject(object, key.address, associatedValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+private func setAssociatedValue(_ value: AssociatedValue, key: String, object: AnyObject) {
+    objc_setAssociatedObject(object, key.address, value, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 }
 
 private func setAndReturn<T>(initialValue: T, key: String, object: AnyObject) -> T {
@@ -83,7 +83,7 @@ private func setAndReturn<T>(initialValue: T, key: String, object: AnyObject) ->
 
 extension NSObjectProtocol where Self: NSObject {
     /**
-     Returns the associated value for the specified  key.
+     Returns the associated value for the specified key.
 
      - Parameters:
         - key: The key of the associated value.
@@ -194,6 +194,30 @@ extension NSObjectProtocol where Self: NSObject {
      */
     public static func setAssociatedValue<T: AnyObject>(weak value: T?, key: String) {
         FZSwiftUtils.setAssociatedValue(weak: value, key: key, object: self)
+    }
+    
+    /// Returns the associated value for the specified key.
+    public subscript<T>(associatedValue key: String) -> T? {
+        get { getAssociatedValue(key) }
+        set { setAssociatedValue(newValue, key: key) }
+    }
+    
+    /// Returns the associated value for the specified key.
+    public subscript<T>(associatedValue key: String, initial: T?) -> T? {
+        get { getAssociatedValue(key, initialValue: initial) }
+        set { setAssociatedValue(newValue, key: key) }
+    }
+    
+    /// Returns the associated value for the specified key.
+    public static subscript<T>(associatedValue key: String) -> T? {
+        get { getAssociatedValue(key) }
+        set { setAssociatedValue(newValue, key: key) }
+    }
+    
+    /// Returns the associated value for the specified key.
+    public static subscript<T>(associatedValue key: String, initial: T?) -> T? {
+        get { getAssociatedValue(key, initialValue: initial) }
+        set { setAssociatedValue(newValue, key: key) }
     }
 }
 

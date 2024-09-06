@@ -132,12 +132,15 @@ public extension URL {
     
     /// A sequence of urls.
     struct URLSequence: Sequence {
+        
         let url: URL
         let predicate: (URL) -> Bool
         var options: FileManager.DirectoryEnumerationOptions = [.skipsSubdirectoryDescendants, .skipsPackageDescendants, .skipsHiddenFiles]
         var maxDepth: Int? = nil
         
-        init(url: URL, predicate: @escaping (URL) -> Bool) {
+        
+        
+        public init(url: URL, predicate: @escaping (URL) -> Bool) {
             self.url = url
             self.predicate = predicate
         }
@@ -151,21 +154,25 @@ public extension URL {
             let predicate: (URL) -> Bool
             let directoryEnumerator: FileManager.DirectoryEnumerator?
             let maxLevel: Int?
-            var maximumLevel = 0
+            let levelCount = LevelCount()
             
+            class LevelCount {
+                var level = 0 { didSet { if oldValue > level { level = oldValue } } }
+            }
+
             init(_ sequence: URLSequence) {
                 predicate = sequence.predicate
                 maxLevel = sequence.maxDepth
                 directoryEnumerator = FileManager.default.enumerator(at: sequence.url, includingPropertiesForKeys: nil, options: sequence.options)
             }
 
-            public mutating func next() -> URL? {
+            public func next() -> URL? {
                 guard let directoryEnumerator = directoryEnumerator else { return nil }
                 while let nextURL = directoryEnumerator.nextObject() as? URL {
                     if let maxLevel = maxLevel, directoryEnumerator.level > maxLevel {
                         directoryEnumerator.skipDescendants()
                     } else if predicate(nextURL) == true {
-                        maximumLevel = level
+                        self.levelCount.level = level
                         return nextURL
                     }
                 }
@@ -186,28 +193,43 @@ public extension URL {
 }
 
 extension URL.URLSequence {
-    /// Includes the contents of folders.
+    /// The number of urls in the sequence.
+    public var count: Int {
+        reduce(0) { count, _ in count + 1 }
+    }
+    
+    public var depth: Int {
+        let iterator = makeIterator()
+        var depth = 0
+        while iterator.next() != nil {
+            depth = iterator.levelCount.level
+        }
+        return depth
+    }
+    
+    /// Returns a new instance of the sequence that'll traverse the folder's contents recursively.
     public var recursive: Self {
         recursive(true)
     }
             
     /**
-     Includes the contents of folders upto the specified maximum depth.
+     Returns a new instance of the sequence that'll traverse the folder's contents recursively up to the specified maximum depth.
      
-     - Parameter maxDepth: The maximum depth of enumeration. A value of `0` enumerates files/folders only at the url level.
+     - Parameter maxDepth: The maximum depth of enumeration.
      */
     public func recursive(maxDepth: Int) -> Self {
-        var sequence = recursive
-        sequence.maxDepth = maxDepth.clamped(min: 0) + 1
+        var sequence = self
+        sequence.maxDepth = maxDepth.clamped(min: 0)
+        sequence.options[.skipsSubdirectoryDescendants] = false
         return sequence
     }
 
-    /// Includes all hidden files/folders.
+    /// Returns a new instance of the sequence that'll include all hidden all hidden (dot) files/folders.
     public var includingHidden: Self {
         includingHidden(true)
     }
     
-    /// Includes the contents of packages.
+    /// Returns a new instance of the sequence that'll treat packages like folders and will traverse their contents.
     public var includingPackageDescendants: Self {
         includingPackageDescendants(true)
     }
@@ -215,7 +237,6 @@ extension URL.URLSequence {
     /// Returns a new instance of the sequence that'll traverse the folder's contents recursively.
     public func recursive(_ recursive: Bool) -> Self {
         var sequence = self
-        sequence.maxDepth = nil
         sequence.options[.skipsSubdirectoryDescendants] = !recursive
         return sequence
     }
@@ -233,26 +254,16 @@ extension URL.URLSequence {
         sequence.options[.skipsPackageDescendants] = !include
         return sequence
     }
-    
-    /// The number of urls in the sequence.
-    public var count: Int {
-        reduce(0) { count, _ in count + 1 }
-    }
-    
-    /// The maximum enumeration depth of the found urls.
-    public var depth: Int {
-        var iterator = makeIterator()
-        while iterator.next() != nil { }
-        return iterator.maximumLevel
-    }
+}
 
+extension URL.URLSequence {
     /// Enumeration options.
     public enum EnumerationOptions: Hashable {
         /// Include hidden files/folders.
         case includingHidden
         ///  Treat packages like folders and will traverse their contents.
         case includingPackageDescendants
-        /// Traverse the folder's contents recursively up to the specified maximum depth. A value of `0` enumerates files/folders only at the url level.
+        /// Traverse the folder's contents recursively up to the specified maximum depth.
         case recursive(maxDepth: Int?)
         /// Traverse the folder's contents recursively.
         public static var recursive: EnumerationOptions { .recursive(maxDepth: nil) }
@@ -278,11 +289,7 @@ extension URL.URLSequence {
         sequence.options[.skipsHiddenFiles] = !options.contains(.includingHidden)
         sequence.options[.skipsPackageDescendants] = !options.contains(.includingPackageDescendants)
         sequence.options[.skipsSubdirectoryDescendants] = !options.contains(where: {$0.recursive == true })
-        if let maxDepth = options.compactMap({$0.depth}).first {
-            sequence.maxDepth = maxDepth + 1
-        } else {
-            sequence.maxDepth = nil
-        }
+        sequence.maxDepth = options.compactMap({$0.depth}).first
         return sequence
     }
     
